@@ -1,280 +1,273 @@
 <template>
-  <div class="hello">
-    <div>
-      <li>Counter:{{n}}</li>
-    </div>
-    <button style="submit" v-on:click="add">追加</button>
-    <button style="submit" @click="reset">リセット</button>
-    <br>
-    <table>
-        <tbody>
-            <tr v-for="counter in counters" :key="counter.text">
-                <td><input v-model="counter.item"></td>
-                <td><input v-model="counter.number"></td>
-            </tr>
-            <tr>
-                <td><input v-model="counter.item"></td>
-                <td><input v-model="counter.number"></td>
-            </tr>
-        </tbody>
-    </table>
+  <div>
+    <v-app>
+      <!-- カウンター機能 -->
+      <v-container fluid>
+        <!-- カウンター結果表示 -->
+        <v-row no-gutters>
+          <v-col> Counter:{{ calTotal }} </v-col>
+        </v-row>
 
-    <table>
-        <thead>
-            <tr>
-                <th>編集</th>
-                <th>Dessert (100g serving)</th>
-                <th>Calories</th>
-                <th>Fat (g)</th>
-                <th>Carbs (g)</th>
-                <th>Protein (g)</th>
-                <th>Iron (%)</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr v-for="item in items" :key="item.id">
-                <td><button v-on:click="edit(item)">編集</button><button v-on:click="del(item.id)">削除</button></td>
+        <!-- カウンターボタン -->
+        <v-row no-gutters>
+          <v-col>
+            <v-btn @click="add">追加</v-btn>
+            <v-btn @click="reset">リセット</v-btn>
+          </v-col>
+        </v-row>
 
-                    <div id="overlay" v-show="showContent">
-                      <!-- <div id="overlay" v-show="showContent"> -->
-                    <div id="content">
-                    <p>name</p>
-                    <input v-model="NAME">
-                    <p>calories</p>
-                    <input v-model="CAL">
-                    <br>
-                    <button v-on:click="closeModal(ID)">編集完了</button>
-                    </div>
-                    </div>
+        <!-- 入力済のフォーム表示 -->
+        <v-row no-gutters v-for="dessert in desserts" :key="dessert.name">
+          <v-col>
+            <v-text-field outlined dense v-model="dessert.name" />
+          </v-col>
+          <v-col>
+            <v-text-field type="number" outlined dense v-model="dessert.cal" />
+          </v-col>
+        </v-row>
 
-                <td>{{item.name}}</td>
-                <td>{{item.cal}}</td>
-                <td>{{item.fat}}</td>
-                <td>{{item.car}}</td>
-                <td>{{item.pro}}</td>
-                <td>{{item.iro}}%</td>
-            </tr>
-        </tbody>
-    </table>
+        <!-- 入力フォーム -->
+        <v-row no-gutters>
+          <v-col>
+            <v-text-field outlined dense v-model="dessert.name" />
+          </v-col>
+          <v-col>
+            <v-text-field type="number" outlined dense v-model="dessert.cal" />
+          </v-col>
+        </v-row>
+      </v-container>
+
+      <!-- データベース機能(Firestoreのデータベース使用) -->
+      <v-container fluid>
+        <!-- データベース表 -->
+        <v-row>
+          <v-col>
+            <v-data-table
+              :headers="headers"
+              :items="items"
+              sort-by="cal"
+              class="elevation-1"
+            >
+              <!-- データ(Firestoreのドキュメント)の編集・削除ボタン追加 -->
+              <template v-slot:[`item.edit`]="{ item }">
+                <v-btn depressed outlined color="blue" @click="editItem(item)"
+                  >編集</v-btn
+                >
+                &thinsp;
+                <v-btn
+                  depressed
+                  outlined
+                  color="red"
+                  @click="deleteItem(item.id)"
+                  >削除</v-btn
+                >
+              </template>
+            </v-data-table>
+          </v-col>
+        </v-row>
+
+        <!-- 編集ボタン押下時のダイアログ -->
+        <v-row justify="center">
+          <v-dialog v-model="dialog" persistent max-width="600px">
+            <v-card>
+              <v-card-text>
+                <v-container>
+                  <!-- データ(Firestoreのドキュメントのname)の変更 -->
+                  <v-row no-gutters>
+                    <v-col>
+                      <div style="font-weight: bold">name</div>
+                    </v-col>
+                  </v-row>
+                  <v-row no-gutters>
+                    <v-col>
+                      <v-textarea outlined v-model="selectedDoc.name" />
+                    </v-col>
+                  </v-row>
+
+                  <!-- データ(Firestoreのドキュメントのcal)の変更 -->
+                  <v-row no-gutters>
+                    <v-col>
+                      <div style="font-weight: bold">calories</div>
+                    </v-col>
+                  </v-row>
+                  <v-row no-gutters>
+                    <v-col>
+                      <v-text-field
+                        type="number"
+                        outlined
+                        v-model="selectedDoc.cal"
+                      />
+                    </v-col>
+                  </v-row>
+                </v-container>
+              </v-card-text>
+
+              <!-- 変更の保存 -->
+              <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn
+                  depressed
+                  outlined
+                  color="blue darken-1"
+                  @click="saveItem()"
+                  >編集完了
+                </v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-dialog>
+        </v-row>
+      </v-container>
+    </v-app>
   </div>
 </template>
 
 <script>
-// Import the functions you need from the SDKs you need
+// Firestoreインポート
 import { initializeApp } from "firebase/app";
 import {
-  getFirestore, collection, doc, getDocs, updateDoc, deleteDoc, onSnapshot//,query, where, orderBy, getDoc, setDoc
-} from "firebase/firestore"
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+  getFirestore,
+  collection,
+  doc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+} from "firebase/firestore";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBDspN5wYMpLLptflRAThOKDOyXOJ7efFs",
   authDomain: "vue-test20220812.firebaseapp.com",
   projectId: "vue-test20220812",
   storageBucket: "vue-test20220812.appspot.com",
   messagingSenderId: "635392134107",
-  appId: "1:635392134107:web:9fd86c1f09e60c9047f5fe"
+  appId: "1:635392134107:web:9fd86c1f09e60c9047f5fe",
 };
 
-// Initialize Firebase
+// Firestore初期化
 const app = initializeApp(firebaseConfig);
-const db=getFirestore(app)
-// const db=getFirestore()
-
-
-
+const db = getFirestore(app);
 
 export default {
-  name: 'HelloWorld',
   data: () => ({
-    counters:[],
-    counter: {
-      item: "",
-      number: "",
-    },
-    n:0,
-    items:[],
-    data:[],
-    ID:"",
-    NAME:"",
-    CAL:"",
+    // カウンター機能用
+    desserts: [], // カウンターの全データ格納
+    dessert: {
+      name: "",
+      cal: "",
+    }, // カウンターの各データ格納
+    calTotal: 0, // カウント数：初期設定=0
 
-    showContent: false
+    // データベース機能用
+    data: [], // Firestoreのコレクション格納(ドキュメントIDなし)
+    items: [], // Firestoreのコレクション格納(ドキュメントID追記)
+    selectedDoc: {
+      id: "",
+      name: "",
+      cal: "",
+    }, // Firestoreから選択したドキュメント格納
 
+    dialog: false, // ダイアログ表示：初期設定=非表示
+
+    headers: [
+      { text: "編集", sortable: false, value: "edit" },
+      {
+        text: "Dessert (100g serving)",
+        align: "start",
+        sortable: false,
+        value: "name",
+      },
+      { text: "Calories", value: "cal" },
+      { text: "Fat (g)", value: "fat" },
+      { text: "Carbs (g)", value: "car" },
+      { text: "Protein (g)", value: "pro" },
+      { text: "Iron (%)", sortable: false, value: "iro" },
+    ], // データベース表のヘッダー
   }),
 
-////////////////////////////////////////
+  // Firestoreのコレクション読み込み
   mounted: function () {
     this.readData();
   },
-////////////////////////////////////////
 
+  // Firestoreのコレクション読み込みデータにドキュメントIDを追記
+  created() {
+    this.listItems();
+  },
 
-created(){
-this.listItems()
-},
+  methods: {
+    // カウンター機能用
+    // カウント
+    add() {
+      this.desserts.push(this.dessert);
+      this.calTotal = Number(this.calTotal) + Number(this.dessert.cal);
+      this.dessert = {
+        name: "",
+        cal: 0,
+      };
+    },
 
+    // カウントのリセット
+    reset() {
+      this.desserts = [];
+      this.dessert = {
+        name: "",
+        cal: "",
+      };
+      this.calTotal = 0;
+    },
 
-  methods:{
-
-
-
-listItems(){
-const q=collection(db,"vue-test")
-onSnapshot(q,(snapShot)=>{
-this.items=[]
-snapShot.forEach((doc)=>{
-  const data=doc.data()
-  data.id=doc.id
-  this.items.push(data)
-})
-}
-)
-},
-
-
-
-
-  /////////////////////////////////////////////////
-    async readData(){
-      const querySnapshot = await getDocs(collection(db, "vue-test"));
-      ////////////////////////////////
-      // const data=doc.data()
-      // data.id=doc.id
-      /////////////////////////////////
-      querySnapshot.forEach((doc) => {
-        // console.log(`${doc.id} => ${doc.data()}`);
-        // console.log(`${doc.id} => ${doc.data().name}`);
-        // this.data.push(doc.data().name)
-        this.data.push(doc.data())
+    // データベース機能用
+    // Firestoreのコレクション読み込み
+    async readData() {
+      const q = collection(db, "vue-test");
+      onSnapshot(q, (snapShot) => {
+        snapShot.forEach((doc) => {
+          this.data.push(doc.data());
+        });
       });
     },
-  /////////////////////////////////////////////////
 
-
-
-    add:function(){
-      this.counters.push(this.counter)
-      this.n=Number(this.n)+Number(this.counter.number)
-      this.counter={
-      item: "",
-      number: ""
-    }
+    // Firestoreのコレクション読み込みデータにドキュメントIDを追記
+    listItems() {
+      const q = collection(db, "vue-test");
+      onSnapshot(q, (snapShot) => {
+        this.items = [];
+        snapShot.forEach((doc) => {
+          const data = doc.data();
+          data.id = doc.id;
+          this.items.push(data);
+        });
+      });
     },
 
-    reset:function(){
-      this.counters=[]
-      this.n=0
+    // Firestoreのドキュメント編集
+    editItem(item) {
+      this.dialog = true;
+      this.selectedDoc = {
+        id: item.id,
+        name: item.name,
+        cal: item.cal,
+      };
     },
 
-    edit: function(item){
-      this.showContent = true
-//       // this.dessert=item
-      // const docRef = doc(db, "vue-test", docId);
-      // const docSnap = getDoc(docRef);
-// this.test=docSnap
-this.ID=item.id
-this.NAME=item.name
-this.CAL=item.cal
-//  console.log(docId)
-// const data={dessert:this.item}
-    // const data={test:this.test}
-
+    // Firestoreのドキュメント保存
+    saveItem() {
+      const ref = doc(db, "vue-test", this.selectedDoc.id);
+      updateDoc(ref, {
+        name: this.selectedDoc.name,
+        cal: Number(this.selectedDoc.cal),
+      }).catch((err) => {
+        console.log("err:", err);
+      });
+      this.dialog = false;
     },
 
-    closeModal: function(docId){
-      // // this.desserts.push(this.dessert)
-      // const data={dessert:this.dessert}
-      // const path="vue-test"
-      // const docPath=doc(collection(db,path))
-      // setDoc(docPath,data)
-
-      // // const cityRef = doc(db, 'vue-test', 'Frozen Yogurt')
-      // // setDoc(cityRef, { merge: true })
-
-      // console.log(item.id)
-      // console.log(docId)
-      const Ref = doc(db, "vue-test", docId);
-        updateDoc(Ref, {
-          // name: item.name,
-          // cal: item.cal,
-          name: this.NAME,
-          cal: this.CAL
-        })
-      .catch(err=>{
-        console.log("err:",err)
-      })
-
-
-
-
-      this.showContent = false
+    // Firestoreのドキュメント削除
+    deleteItem(docId) {
+      deleteDoc(doc(db, "vue-test", docId));
     },
-
-    del: function(docId){
-      deleteDoc(doc(db, "vue-test", docId))
-    },
-
-
-
-  }
-/*   props: {
-    msg: String
-  } */
-}
+  },
+};
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-/* h3 {
-  margin: 40px 0 0;
-}
-ul {
-  list-style-type: none;
-  padding: 0;
-}
-li {
-  display: inline-block;
-  margin: 0 10px;
-}
-a {
-  color: #42b983;
-} */
-
-
-
-
-#overlay{
-  /*要素を重ねた時の順番*/
-  z-index:1;
-
-  /*画面全体を覆う設定*/
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background-color:rgba(0,0,0,0.5);
-
-  /*画面の中央に要素を表示させる設定*/
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-}
-
-#content{
-  z-index:2;
-  width:50%;
-  padding: 1em;
-  background:#fff;
-}
-
-
-
-
-
-
 </style>
